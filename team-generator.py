@@ -3,28 +3,31 @@ import random
 import time
 import tkinter as tk
 from tkinter import filedialog, messagebox
+import os
+import math
 
 file_path = ""
 
 
 # -----------------------------
-# 팀 사이즈 조합 계산
+# 균등 팀 분배 (3~5명)
 # -----------------------------
-def possible_team_sizes(n):
+def balanced_team_sizes(n):
 
-    results = []
+    if n <= 5:
+        return [n]
 
-    def dfs(remain, path):
-        if remain == 0:
-            results.append(path)
-            return
+    team_count = math.ceil(n / 5)
 
-        for s in [3,4,5]:
-            if remain - s >= 0:
-                dfs(remain-s, path+[s])
+    base = n // team_count
+    remainder = n % team_count
 
-    dfs(n, [])
-    return results
+    sizes = [base] * team_count
+
+    for i in range(remainder):
+        sizes[i] += 1
+
+    return sizes
 
 
 # -----------------------------
@@ -37,12 +40,7 @@ def make_teams(names):
     if n <= 5:
         return [names]
 
-    options = possible_team_sizes(n)
-
-    if not options:
-        raise ValueError(f"{n}명은 팀 구성 불가")
-
-    sizes = random.choice(options)
+    sizes = balanced_team_sizes(n)
 
     random.shuffle(names)
 
@@ -82,6 +80,30 @@ def load_csv(path):
                 wargame.append(name)
 
     return paper, wargame
+
+
+# -----------------------------
+# 출력 파일 이름 생성
+# -----------------------------
+def generate_output_filename(input_path):
+
+    base = os.path.splitext(os.path.basename(input_path))[0]
+    folder = os.path.dirname(input_path)
+
+    output_file = os.path.join(folder, f"{base}(output).csv")
+
+    if not os.path.exists(output_file):
+        return output_file
+
+    i = 2
+    while True:
+
+        output_file = os.path.join(folder, f"{base}(output{i}).csv")
+
+        if not os.path.exists(output_file):
+            return output_file
+
+        i += 1
 
 
 # -----------------------------
@@ -143,22 +165,24 @@ def run_program():
             result_rows.append([name,"워게임",team_name])
 
 
-    # 결과 CSV 저장
-    with open("output.csv","w",newline='',encoding="utf-8-sig") as f:
+    # 출력 파일 생성
+    output_file = generate_output_filename(file_path)
+
+    with open(output_file,"w",newline='',encoding="utf-8-sig") as f:
 
         writer = csv.writer(f)
         writer.writerow(["이름","분야","팀명"])
-
         writer.writerows(result_rows)
 
-    result_box.insert(tk.END,"\noutput.csv 저장 완료")
+
+    result_box.insert(tk.END,f"\n{output_file} 저장 완료")
 
 
 # -----------------------------
 # GUI
 # -----------------------------
 root = tk.Tk()
-root.title("랜덤 팀 생성기 (CSV 버전)")
+root.title("랜덤 팀 생성기")
 root.geometry("600x500")
 
 title = tk.Label(root,text="랜덤 팀 생성기",font=("Arial",16))
