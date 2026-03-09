@@ -1,12 +1,17 @@
 import csv
 import random
 import time
+import datetime
 import tkinter as tk
 from tkinter import filedialog, messagebox
 import os
 import math
 
 file_path = ""
+fields_data = {}
+last_result = []
+attempt_count = 0
+result_text_cache = ""
 
 
 # -----------------------------
@@ -42,13 +47,14 @@ def make_teams(names):
 
     sizes = balanced_team_sizes(n)
 
-    random.shuffle(names)
+    shuffled = names[:]
+    random.shuffle(shuffled)
 
     teams = []
     i = 0
 
     for s in sizes:
-        teams.append(names[i:i+s])
+        teams.append(shuffled[i:i+s])
         i += s
 
     return teams
@@ -59,10 +65,10 @@ def make_teams(names):
 # -----------------------------
 def load_csv(path):
 
-    paper = []
-    wargame = []
+    fields = {}
 
     with open(path, newline='', encoding='utf-8-sig') as f:
+
         reader = csv.reader(f)
 
         for row in reader:
@@ -73,13 +79,12 @@ def load_csv(path):
             name = row[0].strip()
             field = row[1].strip()
 
-            if field == "논문":
-                paper.append(name)
+            if field not in fields:
+                fields[field] = []
 
-            elif field == "워게임":
-                wargame.append(name)
+            fields[field].append(name)
 
-    return paper, wargame
+    return fields
 
 
 # -----------------------------
@@ -112,70 +117,109 @@ def generate_output_filename(input_path):
 def choose_file():
 
     global file_path
+    global fields_data
+    global attempt_count
 
     file_path = filedialog.askopenfilename(
         filetypes=[("CSV files","*.csv")]
     )
 
-    file_label.config(text=file_path)
+    if file_path:
+        file_label.config(text=file_path)
+        fields_data = load_csv(file_path)
+        attempt_count = 0
 
 
 # -----------------------------
-# 팀 생성 실행
+# 팀 생성
 # -----------------------------
-def run_program():
+def generate_teams():
 
-    if file_path == "":
-        messagebox.showerror("오류","CSV 파일 선택하세요")
+    global last_result
+    global attempt_count
+    global result_text_cache
+
+    if not fields_data:
+        messagebox.showerror("오류","CSV 파일 먼저 선택하세요")
         return
+
+    attempt_count += 1
 
     seed_value = int(time.time())
     random.seed(seed_value)
 
-    result_box.delete("1.0",tk.END)
-    result_box.insert(tk.END,f"랜덤 시드: {seed_value}\n\n")
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    paper, wargame = load_csv(file_path)
+    result_box.delete("1.0", tk.END)
 
-    paper_teams = make_teams(paper)
-    wargame_teams = make_teams(wargame)
+    header = f"생성 시각: {now}\n랜덤 시드: {seed_value}\n시도 횟수: {attempt_count}\n\n"
+
+    result_box.insert(tk.END, header)
+    result_text_cache = header
 
     result_rows = []
 
-    result_box.insert(tk.END,"===== 논문 팀 =====\n")
+    for field, names in fields_data.items():
 
-    for i,team in enumerate(paper_teams,1):
+        teams = make_teams(names)
 
-        team_name = f"논문{i}팀"
+        title = f"===== {field} 팀 =====\n"
+        result_box.insert(tk.END, title)
+        result_text_cache += title
 
-        result_box.insert(tk.END,team_name+" : "+", ".join(team)+"\n")
+        for i, team in enumerate(teams, 1):
 
-        for name in team:
-            result_rows.append([name,"논문",team_name])
+            team_name = f"{field}{i}팀"
 
-    result_box.insert(tk.END,"\n===== 워게임 팀 =====\n")
+            line = team_name + " : " + ", ".join(team) + "\n"
 
-    for i,team in enumerate(wargame_teams,1):
+            result_box.insert(tk.END, line)
+            result_text_cache += line
 
-        team_name = f"워게임{i}팀"
+            for name in team:
+                result_rows.append([name, field, team_name])
 
-        result_box.insert(tk.END,team_name+" : "+", ".join(team)+"\n")
+        result_box.insert(tk.END, "\n")
+        result_text_cache += "\n"
 
-        for name in team:
-            result_rows.append([name,"워게임",team_name])
+    last_result = result_rows
 
 
-    # 출력 파일 생성
+# -----------------------------
+# 파일 저장
+# -----------------------------
+def save_file():
+
+    if not last_result:
+        messagebox.showerror("오류","먼저 팀을 생성하세요")
+        return
+
     output_file = generate_output_filename(file_path)
 
-    with open(output_file,"w",newline='',encoding="utf-8-sig") as f:
+    with open(output_file, "w", newline='', encoding="utf-8-sig") as f:
 
         writer = csv.writer(f)
         writer.writerow(["이름","분야","팀명"])
-        writer.writerows(result_rows)
+        writer.writerows(last_result)
+
+    result_box.insert(tk.END, f"{output_file} 저장 완료\n")
+    result_text_cache += f"{output_file} 저장 완료\n"
 
 
-    result_box.insert(tk.END,f"\n{output_file} 저장 완료")
+# -----------------------------
+# 클립보드 복사
+# -----------------------------
+def copy_to_clipboard():
+
+    if not result_text_cache:
+        messagebox.showerror("오류","먼저 팀을 생성하세요")
+        return
+
+    root.clipboard_clear()
+    root.clipboard_append(result_text_cache)
+    root.update()
+
+    messagebox.showinfo("복사 완료","팀 결과가 클립보드에 복사되었습니다")
 
 
 # -----------------------------
@@ -183,21 +227,55 @@ def run_program():
 # -----------------------------
 root = tk.Tk()
 root.title("랜덤 팀 생성기")
-root.geometry("600x500")
+root.geometry("700x550")
 
-title = tk.Label(root,text="랜덤 팀 생성기",font=("Arial",16))
-title.pack(pady=10)
 
-btn_file = tk.Button(root,text="CSV 파일 선택",command=choose_file)
-btn_file.pack()
+# 파일 선택 영역
+top_frame = tk.Frame(root)
+top_frame.pack(pady=10)
 
-file_label = tk.Label(root,text="선택된 파일 없음")
-file_label.pack(pady=5)
+btn_file = tk.Button(top_frame,text="CSV 파일 선택",command=choose_file,width=15)
+btn_file.pack(side="left", padx=5)
 
-btn_run = tk.Button(root,text="팀 생성",command=run_program)
-btn_run.pack(pady=10)
+file_label = tk.Label(top_frame,text="선택된 파일 없음",anchor="w")
+file_label.pack(side="left", padx=5)
 
-result_box = tk.Text(root,height=20,width=70)
-result_box.pack()
+
+# 버튼 영역
+button_frame = tk.Frame(root)
+button_frame.pack(pady=5)
+
+btn_generate = tk.Button(button_frame,text="팀 생성",width=12,command=generate_teams)
+btn_generate.pack(side="left", padx=5)
+
+btn_save = tk.Button(button_frame,text="파일 저장",width=12,command=save_file)
+btn_save.pack(side="left", padx=5)
+
+btn_copy = tk.Button(button_frame,text="결과 복사",width=12,command=copy_to_clipboard)
+btn_copy.pack(side="left", padx=5)
+
+
+# 구분선
+separator = tk.Frame(root,height=2,bd=1,relief="sunken")
+separator.pack(fill="x", padx=10, pady=10)
+
+
+# 결과 출력 영역
+result_frame = tk.Frame(root)
+result_frame.pack(fill="both", expand=True, padx=10, pady=5)
+
+scrollbar = tk.Scrollbar(result_frame)
+scrollbar.pack(side="right", fill="y")
+
+result_box = tk.Text(
+    result_frame,
+    yscrollcommand=scrollbar.set,
+    wrap="word"
+)
+
+result_box.pack(fill="both", expand=True)
+
+scrollbar.config(command=result_box.yview)
+
 
 root.mainloop()
