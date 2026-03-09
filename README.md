@@ -27,3 +27,6 @@
 
 ## 실행 방법
 - 그냥 IDLE에서 돌렸음(IDLE python 3.13 64-bit)
+- 결과 예시:
+
+<img src="https://github.com/sage-502/team-generator/blob/main/example/result.png" width="500">
